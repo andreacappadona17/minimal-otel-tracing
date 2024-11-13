@@ -1,0 +1,65 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3001:3000" # Exposes frontend on localhost:3001
+    environment:
+      - BACKEND_URL=http://backend:3000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "3002:3000" # Exposes backend on localhost:3002
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/postgres
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    ports:
+      - "5445:5432" # Exposes PostgreSQL on localhost:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  tempo:
+    image: grafana/tempo
+    ports:
+      - "3200:3200"
+      - "43177:4317"
+      - "43188:4318"
+      - "9411:9411"
+      - "55680:55680"
+      - "55681:55681"
+      - "14250:14250"
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - "./tempo/tempo.yaml:/etc/tempo.yaml"
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Set Grafana admin password
+    depends_on:
+      - tempo
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning # For automatic datasource config
+
+volumes:
+  postgres-data:
+  tempo-data:
+  grafana-data:
